@@ -1208,7 +1208,7 @@ Swagger provides interactive documentation for all endpoints. To test protected 
 
 ## Author
 
-Built for **Delphi Education Hub** by Ezekiel Balogun.  
+Built for **Delphi Education Hub** by Delphi Team.  
 Backend: NestJS · PostgreSQL · Prisma · Supabase · SendGrid  
 Frontend: Next.js (deployed on Vercel)
 
