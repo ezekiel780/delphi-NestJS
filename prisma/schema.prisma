@@ -1,0 +1,62 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  CONVERTED
+  CLOSED
+}
+
+enum ProgramOfInterest {
+  PREP
+  ACADEMICS
+  UPSKILL
+  CAREER
+  NOT_SURE
+}
+
+model User {
+  id            String         @id @default(uuid())
+  email         String         @unique
+  password      String
+  role          Role           @default(ADMIN)
+  createdAt     DateTime       @default(now())
+  refreshTokens RefreshToken[]
+
+  @@map("users")
+}
+
+model Lead {
+  id                String            @id @default(uuid())
+  fullName          String
+  email             String
+  phone             String
+  programOfInterest ProgramOfInterest
+  message           String
+  status            LeadStatus        @default(NEW)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@map("leads")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@map("refresh_tokens")
+}
