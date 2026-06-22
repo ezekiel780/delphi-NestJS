@@ -1,13 +1,25 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import sgMail from '@sendgrid/mail';
+import { Resend } from 'resend';
+import * as fs from 'fs';
+import * as path from 'path';
 
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
+  private resend: Resend;
 
   constructor(private config: ConfigService) {
-    sgMail.setApiKey(this.config.get<string>('SENDGRID_API_KEY') as string);
+    this.resend = new Resend(this.config.get<string>('RESEND_API_KEY'));
+  }
+
+  private loadTemplate(templateName: string, replacements: Record<string, string>): string {
+    const templatePath = path.join(__dirname, 'templates', templateName);
+    let html = fs.readFileSync(templatePath, 'utf8');
+    for (const [key, value] of Object.entries(replacements)) {
+      html = html.replaceAll(`{{${key}}}`, value);
+    }
+    return html;
   }
 
   async sendLeadNotification(lead: {
@@ -19,57 +31,52 @@ export class MailService {
     createdAt: Date;
   }) {
     const adminEmail = this.config.get<string>('ADMIN_NOTIFICATION_EMAIL') as string;
-    const fromEmail = this.config.get<string>('SENDGRID_FROM_EMAIL') as string;
+    const fromEmail = this.config.get<string>('RESEND_FROM_EMAIL') as string;
 
-    const msg: sgMail.MailDataRequired = {
-      to: adminEmail,
-      from: fromEmail,
-      subject: `New Lead: ${lead.fullName} — ${lead.programOfInterest}`,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <div style="background-color: #1a7a4a; padding: 20px; border-radius: 8px 8px 0 0;">
-            <h2 style="color: white; margin: 0;">New Lead — Delphi Education Hub</h2>
-          </div>
-          <div style="background-color: #f9f9f9; padding: 24px; border-radius: 0 0 8px 8px;">
-            <table style="width: 100%; border-collapse: collapse;">
-              <tr>
-                <td style="padding: 10px; font-weight: bold; color: #333; width: 40%;">Full Name</td>
-                <td style="padding: 10px; color: #555;">${lead.fullName}</td>
-              </tr>
-              <tr style="background-color: #e8f5ee;">
-                <td style="padding: 10px; font-weight: bold; color: #333;">Email</td>
-                <td style="padding: 10px; color: #555;">${lead.email}</td>
-              </tr>
-              <tr>
-                <td style="padding: 10px; font-weight: bold; color: #333;">Phone</td>
-                <td style="padding: 10px; color: #555;">${lead.phone}</td>
-              </tr>
-              <tr style="background-color: #e8f5ee;">
-                <td style="padding: 10px; font-weight: bold; color: #333;">Program of Interest</td>
-                <td style="padding: 10px; color: #555;">${lead.programOfInterest}</td>
-              </tr>
-              <tr>
-                <td style="padding: 10px; font-weight: bold; color: #333;">Message</td>
-                <td style="padding: 10px; color: #555;">${lead.message}</td>
-              </tr>
-              <tr style="background-color: #e8f5ee;">
-                <td style="padding: 10px; font-weight: bold; color: #333;">Submitted At</td>
-                <td style="padding: 10px; color: #555;">${new Date(lead.createdAt).toLocaleString()}</td>
-              </tr>
-            </table>
-            <div style="margin-top: 24px; padding: 16px; background-color: #1a7a4a; border-radius: 6px; text-align: center;">
-              <p style="color: white; margin: 0; font-size: 14px;">Log in to your admin dashboard to manage this lead.</p>
-            </div>
-          </div>
-        </div>
-      `,
-    };
+    const html = this.loadTemplate('lead-notification.html', {
+      fullName: lead.fullName,
+      email: lead.email,
+      phone: lead.phone,
+      programOfInterest: lead.programOfInterest,
+      message: lead.message,
+      createdAt: new Date(lead.createdAt).toLocaleString(),
+    });
 
     try {
-      await sgMail.send(msg);
+      await this.resend.emails.send({
+        from: fromEmail,
+        to: adminEmail,
+        subject: `New Lead: ${lead.fullName} — ${lead.programOfInterest}`,
+        html,
+      });
       this.logger.log(`Lead notification sent to ${adminEmail}`);
     } catch (error) {
       this.logger.error('Failed to send lead notification email', error);
+    }
+  }
+
+  async sendConfirmationEmail(lead: {
+    fullName: string;
+    email: string;
+    programOfInterest: string;
+  }) {
+    const fromEmail = this.config.get<string>('RESEND_FROM_EMAIL') as string;
+
+    const html = this.loadTemplate('confirmation.html', {
+      fullName: lead.fullName,
+      programOfInterest: lead.programOfInterest,
+    });
+
+    try {
+      await this.resend.emails.send({
+        from: fromEmail,
+        to: lead.email,
+        subject: `We've received your message — Delphi Education Hub`,
+        html,
+      });
+      this.logger.log(`Confirmation email sent to ${lead.email}`);
+    } catch (error) {
+      this.logger.error('Failed to send confirmation email', error);
     }
   }
 }

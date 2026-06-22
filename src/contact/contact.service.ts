@@ -23,6 +23,12 @@ export class ContactService {
 
     await this.mailService.sendLeadNotification(lead);
 
+    await this.mailService.sendConfirmationEmail({
+      fullName: lead.fullName,
+      email: lead.email,
+      programOfInterest: lead.programOfInterest,
+    });
+
     return {
       message: 'Your message has been received. We will get back to you shortly.',
     };
